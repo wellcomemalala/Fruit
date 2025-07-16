@@ -3,13 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบทำบัญชีรายรับรายจ่าย - ร้านอาหาร (Firebase)</title>
+    <title>ระบบทำบัญชีรายรับรายจ่าย - ร้านผลไม้</title>
 
     <!-- Firebase SDK (Compat version for easier integration) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
+    <!-- *** NEW: Add Chart.js Library *** -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
+        /* CSS ทั้งหมดเหมือนเดิม ไม่มีการเปลี่ยนแปลง */
         * {
             margin: 0;
             padding: 0;
@@ -379,18 +383,27 @@
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
-
+        
+        /* *** NEW: Chart container styling *** */
         .chart-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
             width: 100%;
-            height: 300px;
             margin-top: 20px;
+        }
+
+        .chart-box {
             background: #f8f9fa;
             border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #6c757d;
-            font-size: 1.1em;
+            padding: 15px;
+            height: 350px; /* Adjust height as needed */
+        }
+        
+        @media (max-width: 992px) {
+            .chart-container {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media (max-width: 768px) {
@@ -416,8 +429,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🍽️ ระบบทำบัญชีร้านอาหาร</h1>
-            <p>จัดการรายรับรายจ่ายอย่างมีประสิทธิภาพ (เชื่อมต่อฐานข้อมูลออนไลน์)</p>
+            <h1>🍎 ระบบทำบัญชีร้านผลไม้(fruitShopApp)</h1>
+            <p>เปลี่ยนธุรกิจแค่ค้นหา (fruitShopApp) ในโค้ด แล้วแก้ 2 บรรทัด  จากนั้นไปแก้ไขประเภทรายรับรายจ่ายแค่นี้</p>
         </div>
 
         <div class="nav-tabs">
@@ -509,11 +522,9 @@
                             <label>ประเภทรายรับ</label>
                             <select id="incomeType" required>
                                 <option value="">เลือกประเภท</option>
-                                <option value="อาหาร">ขายอาหาร</option>
-                                <option value="เครื่องดื่ม">ขายเครื่องดื่ม</option>
-                                <option value="ของหวาน">ของหวาน</option>
-                                <option value="เดลิเวอรี่">เดลิเวอรี่</option>
+                                <option value="ขายผลไม้">ขายผลไม้</option>
                                 <option value="อื่นๆ">อื่นๆ</option>
+								
                             </select>
                         </div>
                         <div class="form-group">
@@ -552,18 +563,13 @@
                             <select id="expenseType" required>
                                 <option value="">เลือกประเภท</option>
                                 <optgroup label="รายจ่ายประจำ">
-                                    <option value="วัตถุดิบ">ค่าวัตถุดิบ</option>
-                                    <option value="ค่าแรง">ค่าแรงพนักงาน</option>
-                                    <option value="ค่าแก๊ส">ค่าแก๊ส</option>
-                                    <option value="ค่าไฟ">ค่าไฟฟ้า</option>
-                                    <option value="ค่าเช่า">ค่าเช่า</option>
-                                    <option value="ค่าน้ำ">ค่าน้ำประปา</option>
+                                    <option value="ค่าผลไม้">ค่าผลไม้</option>
+                                    <option value="ค่าแรงพนักงาน">ค่าแรงพนักงาน</option>
+                                    <option value="ค่าน้ำแข็ง">ค่าน้ำแข็ง</option>
                                 </optgroup>
                                 <optgroup label="รายจ่ายไม่ประจำ">
-                                    <option value="ซ่อมแซม">ซ่อมแซม</option>
-                                    <option value="อุปกรณ์">อุปกรณ์เพิ่มเติม</option>
-                                    <option value="โปรโมชั่น">โปรโมชั่น</option>
-                                    <option value="การตลาด">การตลาด</option>
+                                    <option value="ค่าถุงห่อ">ค่าถุงห่อ</option>
+                                    <option value="กล่องน้ำจิ้ม">กล่องน้ำจิ้ม</option>
                                     <option value="อื่นๆ">อื่นๆ</option>
                                 </optgroup>
                             </select>
@@ -634,8 +640,15 @@
                         <small>บาท</small>
                     </div>
                 </div>
+
+                <!-- *** NEW: Canvas elements for charts *** -->
                 <div class="chart-container">
-                    📈 กราฟจะแสดงที่นี่ (ต้องการไลบรารี Chart.js)
+                    <div class="chart-box">
+                        <canvas id="incomeReportChart"></canvas>
+                    </div>
+                     <div class="chart-box">
+                        <canvas id="expenseReportChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -681,17 +694,17 @@
         <div id="backup" class="tab-content">
              <div class="card">
                 <h3>💾 การจัดการข้อมูล</h3>
-                <p>คุณสามารถส่งออกข้อมูลทั้งหมดเพื่อสำรองเก็บไว้ในเครื่องของคุณ หรือนำเข้าข้อมูลจากไฟล์สำรองได้</p>
+                <p>คุณสามารถส่งออกข้อมูลทั้งหมดของแอปนี้เพื่อสำรองเก็บไว้ หรือนำเข้าข้อมูลจากไฟล์สำรองได้</p>
                 <div style="margin-top: 20px;">
                     <button class="btn btn-success" onclick="exportData()">📊 ส่งออกข้อมูลเป็นไฟล์ JSON</button>
-                    <button class="btn btn-warning" onclick="restoreData()">🔄 นำเข้าข้อมูล (เขียนทับทั้งหมด)</button>
+                    <button class="btn btn-warning" onclick="restoreData()">🔄 นำเข้าข้อมูล (เขียนทับข้อมูลแอปนี้)</button>
                 </div>
                 <div class="alert alert-warning" style="margin-top: 20px; position: static; opacity: 1; transform: none;">
-                    <b>ข้อควรระวัง:</b> การ 'นำเข้าข้อมูล' จะเขียนทับข้อมูลทั้งหมดที่อยู่บนระบบคลาวด์ด้วยข้อมูลจากไฟล์ที่คุณเลือก เหมาะสำหรับกรณีที่ต้องการกู้คืนข้อมูลที่เคยสำรองไว้เท่านั้น
+                    <b>ข้อควรระวัง:</b> การ 'นำเข้าข้อมูล' จะเขียนทับข้อมูลทั้งหมดของ 'แอปบัญชีร้านอาหาร' ด้วยข้อมูลจากไฟล์ที่คุณเลือก (ข้อมูลโปรเจกต์อื่นจะปลอดภัย)
                 </div>
                 <hr style="margin: 20px 0;">
-                <p style="color: #dc3545;"><b>คำเตือน:</b> การกระทำนี้จะลบข้อมูลทั้งหมดในฐานข้อมูลอย่างถาวรและไม่สามารถกู้คืนได้ เหมาะสำหรับเริ่มต้นระบบใหม่ทั้งหมด</p>
-                <button class="btn btn-danger" onclick="clearAllData()">🗑️ ล้างข้อมูลทั้งหมด</button>
+                <p style="color: #dc3545;"><b>คำเตือน:</b> การกระทำนี้จะลบข้อมูลของ 'แอปบัญชีร้านอาหาร' ทั้งหมดอย่างถาวรและไม่สามารถกู้คืนได้ (ข้อมูลโปรเจกต์อื่นจะปลอดภัย)</p>
+                <button class="btn btn-danger" onclick="clearAllData()">🗑️ ล้างข้อมูลแอปนี้ทั้งหมด</button>
             </div>
         </div>
     </div>
@@ -699,23 +712,26 @@
     <script>
         // --- START: FIREBASE CONFIGURATION ---
         const firebaseConfig = {
-            apiKey: "AIzaSyAMRFYOKQ5s-apq7aeVRlJTrDpMIgoN5LI",
-            authDomain: "project-1334432856828062315.firebaseapp.com",
-            databaseURL: "https://project-1334432856828062315-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "project-1334432856828062315",
-            storageBucket: "project-1334432856828062315.firebasestorage.app",
-            messagingSenderId: "491251658331",
-            appId: "1:491251658331:web:b542190e23594d109b597e"
+            apiKey: "AIzaSyD-pzUrxmDXdtxq8l6WdB8oRkZj23dncOo",
+            authDomain: "v2-6b470.firebaseapp.com",
+            databaseURL: "https://v2-6b470-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "v2-6b470",
+            storageBucket: "v2-6b470.firebasestorage.app",
+            messagingSenderId: "161585660785",
+            appId: "1:161585660785:web:19c712fde5c63c80e6ecd0"
         };
 
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        const transactionsRef = database.ref('transactions');
-        const budgetRef = database.ref('budget');
+        
+        const appRootRef = database.ref('fruitShopApp'); // Changed to a new app name
+        
+        const transactionsRef = appRootRef.child('transactions');
+        const budgetRef = appRootRef.child('budget');
         // --- END: FIREBASE CONFIGURATION ---
 
-        // Global variables to hold data from Firebase
+        // Global variables
         let transactions = [];
         let budget = {
             monthlyIncomeTarget: 0,
@@ -723,6 +739,10 @@
             monthlyProfitTarget: 0,
             materialBudget: 0
         };
+        // *** NEW: Global variables for chart instances ***
+        let incomeChartInstance = null;
+        let expenseChartInstance = null;
+
 
         // Load data when the page starts
         window.onload = function() {
@@ -730,23 +750,17 @@
             listenForData();
         };
 
-        // Listen for real-time data changes from Firebase
+        // Listen for data changes at the application root
         function listenForData() {
-            // Listen for all data changes at the root level
-            database.ref().on('value', (snapshot) => {
+            appRootRef.on('value', (snapshot) => {
                 const data = snapshot.val() || {};
-                
-                // Process transactions
                 const transactionsData = data.transactions || {};
                 transactions = Object.keys(transactionsData).map(key => ({ id: key, ...transactionsData[key] }));
-                
-                // Process budget
                 budget = data.budget || { monthlyIncomeTarget: 0, monthlyExpenseBudget: 0, monthlyProfitTarget: 0, materialBudget: 0 };
                 
                 updateBudgetForm();
                 rerenderAll();
-                console.log("Data updated from Firebase.");
-
+                console.log("Data from 'fruitShopApp' updated.");
             }, (error) => {
                 console.error(error);
                 showAlert('danger', 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้');
@@ -831,7 +845,7 @@
                 .catch(err => showAlert('danger', 'เกิดข้อผิดพลาด: ' + err.message));
         };
         
-        // Update the budget form fields with data from Firebase
+        // Update the budget form fields
         function updateBudgetForm() {
             document.getElementById('monthlyIncomeTarget').value = budget.monthlyIncomeTarget || '';
             document.getElementById('monthlyExpenseBudget').value = budget.monthlyExpenseBudget || '';
@@ -870,7 +884,7 @@
             updateRecentTransactions();
         }
 
-        // Generic function to render a list of transactions
+        // *** CHANGED: Use .prepend() instead of .appendChild() to show newest first ***
         function renderTransactionList(containerId, transactionArray, type) {
             const container = document.getElementById(containerId);
             container.innerHTML = '';
@@ -891,7 +905,7 @@
                     </div>
                     <button class="delete-btn" onclick="deleteTransaction('${t.id}')">ลบ</button>
                 `;
-                container.appendChild(item);
+                container.prepend(item); // <-- The key change is here!
             });
         }
         
@@ -910,7 +924,7 @@
             renderTransactionList('expenseList', allExpenses, 'expense');
         }
 
-        // Delete a transaction from Firebase
+        // Delete a transaction
         function deleteTransaction(id) {
             if (confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?')) {
                 transactionsRef.child(id).remove()
@@ -919,6 +933,7 @@
             }
         }
 
+        // Update budget status display
         function updateBudgetStatus() {
             const currentMonth = new Date().toISOString().substring(0, 7);
             const monthExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentMonth)).reduce((sum, t) => sum + t.amount, 0);
@@ -946,6 +961,7 @@
                 </div>`;
         }
         
+        // *** NEW/CHANGED: Generate report and create charts ***
         function generateReport() {
             const period = document.getElementById('reportPeriod').value;
             let startDate, endDate;
@@ -957,8 +973,9 @@
                     startDate = endDate = todayStr;
                     break;
                 case 'week':
-                    const dayOfWeek = today.getDay();
-                    const weekStart = new Date(today.setDate(today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1) ));
+                    const dayOfWeek = today.getDay() === 0 ? 6 : today.getDay() - 1;
+                    const weekStart = new Date(today);
+                    weekStart.setDate(today.getDate() - dayOfWeek);
                     startDate = weekStart.toISOString().split('T')[0];
                     endDate = todayStr;
                     break;
@@ -981,19 +998,97 @@
             }
 
             const filtered = transactions.filter(t => t.date >= startDate && t.date <= endDate);
+            
             const totalIncome = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
             const totalExpense = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
             document.getElementById('reportTotalIncome').textContent = formatMoney(totalIncome);
             document.getElementById('reportTotalExpense').textContent = formatMoney(totalExpense);
             document.getElementById('reportNetProfit').textContent = formatMoney(totalIncome - totalExpense);
+            
             document.getElementById('reportResult').style.display = 'block';
             showAlert('success', 'สร้างรายงานเรียบร้อย!');
+
+            // --- Chart Creation Logic ---
+            const incomeData = processCategoryData(filtered, 'income');
+            const expenseData = processCategoryData(filtered, 'expense');
+
+            createOrUpdateDoughnutChart(
+                'incomeReportChart', 
+                'incomeChartInstance',
+                'สัดส่วนรายรับ',
+                Object.keys(incomeData), 
+                Object.values(incomeData)
+            );
+
+            createOrUpdateDoughnutChart(
+                'expenseReportChart',
+                'expenseChartInstance',
+                'สัดส่วนรายจ่าย',
+                Object.keys(expenseData), 
+                Object.values(expenseData)
+            );
         }
 
-        // Export data as a JSON file
+        function processCategoryData(transactions, type) {
+            const categoryData = {};
+            transactions
+                .filter(t => t.type === type)
+                .forEach(t => {
+                    if (categoryData[t.category]) {
+                        categoryData[t.category] += t.amount;
+                    } else {
+                        categoryData[t.category] = t.amount;
+                    }
+                });
+            return categoryData;
+        }
+
+        function createOrUpdateDoughnutChart(canvasId, instanceVar, title, labels, data) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            
+            // Destroy the old chart instance if it exists
+            if (window[instanceVar]) {
+                window[instanceVar].destroy();
+            }
+
+            // Create new chart
+            window[instanceVar] = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels.length > 0 ? labels : ['ไม่มีข้อมูล'],
+                    datasets: [{
+                        label: 'จำนวนเงิน (บาท)',
+                        data: data.length > 0 ? data : [1],
+                        backgroundColor: [
+                            '#4CAF50', '#FFC107', '#2196F3', '#F44336', '#9C27B0',
+                            '#FF9800', '#009688', '#795548', '#607D8B', '#E91E63'
+                        ],
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        },
+                        title: {
+                            display: true,
+                            text: title,
+                            font: { size: 16 }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        // Export data
         function exportData() {
-            database.ref().once('value').then((snapshot) => {
+            appRootRef.once('value').then((snapshot) => {
                 const dataToExport = snapshot.val();
                 if (!dataToExport) {
                     showAlert('warning', 'ไม่มีข้อมูลให้ส่งออก');
@@ -1004,14 +1099,14 @@
                 const url = URL.createObjectURL(dataBlob);
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = `backup_ร้านอาหาร_${new Date().toISOString().split('T')[0]}.json`;
+                link.download = `backup_ร้านผลไม้_${new Date().toISOString().split('T')[0]}.json`;
                 link.click();
                 URL.revokeObjectURL(url);
                 showAlert('success', 'ส่งออกข้อมูลเรียบร้อย!');
             });
         }
 
-        // *** NEW FUNCTION: Restore data from a JSON file ***
+        // Restore data
         function restoreData() {
             const input = document.createElement('input');
             input.type = 'file';
@@ -1024,15 +1119,14 @@
                 reader.onload = function(event) {
                     try {
                         const data = JSON.parse(event.target.result);
-                        // Basic validation to check if the file has the expected structure
                         if (typeof data.transactions === 'undefined' && typeof data.budget === 'undefined') {
                             showAlert('danger', 'ไฟล์ไม่ถูกต้อง! ไม่มีข้อมูล transactions หรือ budget');
                             return;
                         }
 
-                        if (confirm('คุณต้องการเขียนทับข้อมูลทั้งหมดบนคลาวด์ด้วยข้อมูลจากไฟล์นี้หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้')) {
-                            if (confirm('ยืนยันครั้งสุดท้าย! ข้อมูลปัจจุบันทั้งหมดจะถูกแทนที่!')) {
-                                database.ref().set(data)
+                        if (confirm('คุณต้องการเขียนทับข้อมูลทั้งหมดของแอปนี้ด้วยข้อมูลจากไฟล์นี้หรือไม่? (ข้อมูลโปรเจกต์อื่นจะปลอดภัย)')) {
+                            if (confirm('ยืนยันครั้งสุดท้าย! ข้อมูลปัจจุบันของแอปนี้จะถูกแทนที่!')) {
+                                appRootRef.set(data)
                                     .then(() => showAlert('success', 'นำเข้าและเขียนทับข้อมูลเรียบร้อยแล้ว!'))
                                     .catch(err => showAlert('danger', 'เกิดข้อผิดพลาดในการเขียนทับข้อมูล: ' + err.message));
                             }
@@ -1046,12 +1140,12 @@
             input.click();
         }
 
-        // Clear all data from Firebase
+        // Clear all data
         function clearAllData() {
-            if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้ และจะลบข้อมูลของทุกคนที่ใช้งานระบบนี้!')) {
-                 if (confirm('ยืนยันครั้งสุดท้ายเพื่อล้างข้อมูลทั้งหมด!')) {
-                    database.ref().set(null)
-                        .then(() => showAlert('success', 'ล้างข้อมูลทั้งหมดเรียบร้อย!'))
+            if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลทั้งหมดของ "แอปบัญชีร้านผลไม้"? (ข้อมูลโปรเจกต์อื่นจะปลอดภัย)')) {
+                 if (confirm('ยืนยันครั้งสุดท้ายเพื่อล้างข้อมูลของแอปนี้ทั้งหมด!')) {
+                    appRootRef.set(null)
+                        .then(() => showAlert('success', 'ล้างข้อมูลของแอปนี้เรียบร้อย!'))
                         .catch(err => showAlert('danger', 'เกิดข้อผิดพลาด: ' + err.message));
                  }
             }
@@ -1064,14 +1158,12 @@
             alertDiv.textContent = message;
             document.body.appendChild(alertDiv);
             
-            // Trigger transition
             setTimeout(() => alertDiv.classList.add('show'), 10);
 
-            // Remove after 3 seconds
             setTimeout(() => {
                  alertDiv.classList.remove('show');
                  setTimeout(() => alertDiv.remove(), 500);
-            }, 4000); // Increased time for longer messages
+            }, 4000);
         }
 
         // Helper function to format money
