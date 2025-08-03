@@ -384,7 +384,6 @@
             border: 1px solid #f5c6cb;
         }
         
-        /* *** NEW: Chart container styling *** */
         .chart-container {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -440,6 +439,7 @@
             <button class="nav-tab" onclick="showTab('reports')">📈 รายงาน</button>
             <button class="nav-tab" onclick="showTab('budget')">🎯 งบประมาณ</button>
             <button class="nav-tab" onclick="showTab('backup')">💾 จัดการข้อมูล</button>
+            <button class="nav-tab" onclick="showTab('history')">📜 ประวัติทั้งหมด</button>
         </div>
 
         <!-- Dashboard Tab -->
@@ -641,7 +641,6 @@
                     </div>
                 </div>
 
-                <!-- *** NEW: Canvas elements for charts *** -->
                 <div class="chart-container">
                     <div class="chart-box">
                         <canvas id="incomeReportChart"></canvas>
@@ -707,27 +706,60 @@
                 <button class="btn btn-danger" onclick="clearAllData()">🗑️ ล้างข้อมูลแอปนี้ทั้งหมด</button>
             </div>
         </div>
+
+        <!-- History Tab -->
+        <div id="history" class="tab-content">
+            <div class="card">
+                <h3>📜 ประวัติรายการทั้งหมด</h3>
+                <p>ที่นี่คุณสามารถดูและกรองรายการทั้งหมดที่เคยบันทึกไว้ในระบบ</p>
+                
+                <div class="form-grid" style="margin-top: 20px;">
+                    <div class="form-group">
+                        <label>กรองตามประเภท</label>
+                        <select id="historyFilterType">
+                            <option value="all">ทั้งหมด</option>
+                            <option value="income">เฉพาะรายรับ</option>
+                            <option value="expense">เฉพาะรายจ่าย</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>จากวันที่</label>
+                        <input type="date" id="historyFilterFrom">
+                    </div>
+                    <div class="form-group">
+                        <label>ถึงวันที่</label>
+                        <input type="date" id="historyFilterTo">
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="renderFullHistory()">🔍 ค้นหา</button>
+            </div>
+
+            <div class="card">
+                <h3>📋 ผลการค้นหา</h3>
+                <div id="historyList" class="transaction-list">
+                    <p>กรุณากดค้นหาเพื่อแสดงข้อมูล...</p>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
         // --- START: FIREBASE CONFIGURATION ---
 const firebaseConfig = {
-  apiKey: "AIzaSyDskwJlUNbr3zkKnyY_-n582PdoCrts2AE",
-  authDomain: "supertest01-55ac2.firebaseapp.com",
-  databaseURL: "https://supertest01-55ac2-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "supertest01-55ac2",
-  storageBucket: "supertest01-55ac2.firebasestorage.app",
-  messagingSenderId: "846236839338",
-  appId: "1:846236839338:web:260ca9b6af72c69837cfd3",
-  measurementId: "G-F26Z20XG62"
+  apiKey: "AIzaSyAmAmceLCl40QTnWe3Prso-psMN6jNnY-U",
+  authDomain: "supertest02-689bd.firebaseapp.com",
+  databaseURL: "https://supertest02-689bd-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "supertest02-689bd",
+  storageBucket: "supertest02-689bd.firebasestorage.app",
+  messagingSenderId: "941347468855",
+  appId: "1:941347468855:web:b19101cd3237d1896bb1b2",
+  measurementId: "G-JP0SP2T4KG"
 };
-
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        
-        const appRootRef = database.ref('fruitShopApp'); // Changed to a new app name
-        
+        const appRootRef = database.ref('fruitShopApp');
         const transactionsRef = appRootRef.child('transactions');
         const budgetRef = appRootRef.child('budget');
         // --- END: FIREBASE CONFIGURATION ---
@@ -740,15 +772,29 @@ const firebaseConfig = {
             monthlyProfitTarget: 0,
             materialBudget: 0
         };
-        // *** NEW: Global variables for chart instances ***
         let incomeChartInstance = null;
         let expenseChartInstance = null;
 
+        // --- NEW: Centralized Sorting Function ---
+        function sortTransactions(a, b) {
+            // Primary sort: by date, newest to oldest
+            const dateComparison = new Date(b.date) - new Date(a.date);
+            if (dateComparison !== 0) {
+                return dateComparison;
+            }
+            // Secondary sort: by Firebase key (id), newest to oldest.
+            // A newer key is lexicographically greater than an older one.
+            return b.id.localeCompare(a.id);
+        }
 
         // Load data when the page starts
         window.onload = function() {
             setTodayDate();
             listenForData();
+            // Listen for changes on history filters to auto-search
+            document.getElementById('historyFilterType').onchange = renderFullHistory;
+            document.getElementById('historyFilterFrom').onchange = renderFullHistory;
+            document.getElementById('historyFilterTo').onchange = renderFullHistory;
         };
 
         // Listen for data changes at the application root
@@ -772,6 +818,7 @@ const firebaseConfig = {
             updateDashboard();
             updateTransactionLists();
             updateBudgetStatus();
+            renderFullHistory();
         }
 
         // Switch between tabs
@@ -789,6 +836,7 @@ const firebaseConfig = {
             document.getElementById('expenseDate').value = today;
             document.getElementById('reportFromDate').value = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
             document.getElementById('reportToDate').value = today;
+            document.getElementById('historyFilterTo').value = today;
         }
 
         // Handle Income Form Submission
@@ -858,15 +906,12 @@ const firebaseConfig = {
         function updateDashboard() {
             const today = new Date().toISOString().split('T')[0];
             const currentMonth = new Date().toISOString().substring(0, 7);
-
             const todayIncome = transactions.filter(t => t.type === 'income' && t.date === today).reduce((sum, t) => sum + t.amount, 0);
             const todayExpense = transactions.filter(t => t.type === 'expense' && t.date === today).reduce((sum, t) => sum + t.amount, 0);
             const todayProfit = todayIncome - todayExpense;
-
             const monthIncome = transactions.filter(t => t.type === 'income' && t.date.startsWith(currentMonth)).reduce((sum, t) => sum + t.amount, 0);
             const monthExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentMonth)).reduce((sum, t) => sum + t.amount, 0);
             const monthProfit = monthIncome - monthExpense;
-
             document.getElementById('todayIncome').textContent = formatMoney(todayIncome);
             document.getElementById('todayExpense').textContent = formatMoney(todayExpense);
             document.getElementById('todayProfit').textContent = formatMoney(todayProfit);
@@ -874,23 +919,19 @@ const firebaseConfig = {
             document.getElementById('monthExpense').textContent = formatMoney(monthExpense);
             document.getElementById('monthProfit').textContent = formatMoney(monthProfit);
             document.getElementById('profitTarget').textContent = formatMoney(budget.monthlyProfitTarget);
-            
             const remainingBudget = (budget.monthlyExpenseBudget || 0) - monthExpense;
             document.getElementById('remainingBudget').textContent = formatMoney(remainingBudget);
-
             const profitProgress = budget.monthlyProfitTarget > 0 ? Math.min((monthProfit / budget.monthlyProfitTarget) * 100, 100) : 0;
             document.getElementById('profitProgress').textContent = Math.round(profitProgress) + '%';
             document.getElementById('profitProgressBar').style.width = profitProgress + '%';
-
             updateRecentTransactions();
         }
 
-        // *** CHANGED: Use .prepend() instead of .appendChild() to show newest first ***
-        function renderTransactionList(containerId, transactionArray, type) {
+        function renderTransactionList(containerId, transactionArray) {
             const container = document.getElementById(containerId);
             container.innerHTML = '';
             if (transactionArray.length === 0) {
-                container.innerHTML = `<p>ยังไม่มีรายการ${type ? (type === 'income' ? 'รายรับ' : 'รายจ่าย') : ''}</p>`;
+                container.innerHTML = `<p>ยังไม่มีรายการ</p>`;
                 return;
             }
             transactionArray.forEach(t => {
@@ -906,26 +947,24 @@ const firebaseConfig = {
                     </div>
                     <button class="delete-btn" onclick="deleteTransaction('${t.id}')">ลบ</button>
                 `;
-                container.prepend(item); // <-- The key change is here!
+                container.appendChild(item);
             });
         }
         
         function updateRecentTransactions() {
             const recent = [...transactions]
-                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .sort(sortTransactions) // <-- FIXED: Use centralized sorting function
                 .slice(0, 10);
             renderTransactionList('recentTransactions', recent);
         }
         
         function updateTransactionLists() {
-            const allIncomes = [...transactions].filter(t => t.type === 'income').sort((a,b) => new Date(b.date) - new Date(a.date));
-            const allExpenses = [...transactions].filter(t => t.type === 'expense').sort((a,b) => new Date(b.date) - new Date(a.date));
-
-            renderTransactionList('incomeList', allIncomes, 'income');
-            renderTransactionList('expenseList', allExpenses, 'expense');
+            const allIncomes = [...transactions].filter(t => t.type === 'income').sort(sortTransactions); // <-- FIXED
+            const allExpenses = [...transactions].filter(t => t.type === 'expense').sort(sortTransactions); // <-- FIXED
+            renderTransactionList('incomeList', allIncomes);
+            renderTransactionList('expenseList', allExpenses);
         }
 
-        // Delete a transaction
         function deleteTransaction(id) {
             if (confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?')) {
                 transactionsRef.child(id).remove()
@@ -934,13 +973,11 @@ const firebaseConfig = {
             }
         }
 
-        // Update budget status display
         function updateBudgetStatus() {
             const currentMonth = new Date().toISOString().substring(0, 7);
             const monthExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentMonth)).reduce((sum, t) => sum + t.amount, 0);
             const monthIncome = transactions.filter(t => t.type === 'income' && t.date.startsWith(currentMonth)).reduce((sum, t) => sum + t.amount, 0);
             const monthProfit = monthIncome - monthExpense;
-
             const container = document.getElementById('budgetStatus');
             container.innerHTML = `
                 <div class="summary-grid">
@@ -962,13 +999,11 @@ const firebaseConfig = {
                 </div>`;
         }
         
-        // *** NEW/CHANGED: Generate report and create charts ***
         function generateReport() {
             const period = document.getElementById('reportPeriod').value;
             let startDate, endDate;
             const today = new Date();
             const todayStr = today.toISOString().split('T')[0];
-
             switch (period) {
                 case 'today':
                     startDate = endDate = todayStr;
@@ -997,38 +1032,18 @@ const firebaseConfig = {
                     }
                     break;
             }
-
             const filtered = transactions.filter(t => t.date >= startDate && t.date <= endDate);
-            
             const totalIncome = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
             const totalExpense = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-
             document.getElementById('reportTotalIncome').textContent = formatMoney(totalIncome);
             document.getElementById('reportTotalExpense').textContent = formatMoney(totalExpense);
             document.getElementById('reportNetProfit').textContent = formatMoney(totalIncome - totalExpense);
-            
             document.getElementById('reportResult').style.display = 'block';
             showAlert('success', 'สร้างรายงานเรียบร้อย!');
-
-            // --- Chart Creation Logic ---
             const incomeData = processCategoryData(filtered, 'income');
             const expenseData = processCategoryData(filtered, 'expense');
-
-            createOrUpdateDoughnutChart(
-                'incomeReportChart', 
-                'incomeChartInstance',
-                'สัดส่วนรายรับ',
-                Object.keys(incomeData), 
-                Object.values(incomeData)
-            );
-
-            createOrUpdateDoughnutChart(
-                'expenseReportChart',
-                'expenseChartInstance',
-                'สัดส่วนรายจ่าย',
-                Object.keys(expenseData), 
-                Object.values(expenseData)
-            );
+            createOrUpdateDoughnutChart('incomeReportChart', 'incomeChartInstance','สัดส่วนรายรับ', Object.keys(incomeData), Object.values(incomeData));
+            createOrUpdateDoughnutChart('expenseReportChart','expenseChartInstance','สัดส่วนรายจ่าย', Object.keys(expenseData), Object.values(expenseData));
         }
 
         function processCategoryData(transactions, type) {
@@ -1047,13 +1062,9 @@ const firebaseConfig = {
 
         function createOrUpdateDoughnutChart(canvasId, instanceVar, title, labels, data) {
             const ctx = document.getElementById(canvasId).getContext('2d');
-            
-            // Destroy the old chart instance if it exists
             if (window[instanceVar]) {
                 window[instanceVar].destroy();
             }
-
-            // Create new chart
             window[instanceVar] = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -1061,10 +1072,7 @@ const firebaseConfig = {
                     datasets: [{
                         label: 'จำนวนเงิน (บาท)',
                         data: data.length > 0 ? data : [1],
-                        backgroundColor: [
-                            '#4CAF50', '#FFC107', '#2196F3', '#F44336', '#9C27B0',
-                            '#FF9800', '#009688', '#795548', '#607D8B', '#E91E63'
-                        ],
+                        backgroundColor: ['#4CAF50', '#FFC107', '#2196F3', '#F44336', '#9C27B0', '#FF9800', '#009688', '#795548', '#607D8B', '#E91E63'],
                         borderColor: '#fff',
                         borderWidth: 2
                     }]
@@ -1073,21 +1081,13 @@ const firebaseConfig = {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: {
-                            position: 'bottom',
-                        },
-                        title: {
-                            display: true,
-                            text: title,
-                            font: { size: 16 }
-                        }
+                        legend: { position: 'bottom' },
+                        title: { display: true, text: title, font: { size: 16 } }
                     }
                 }
             });
         }
 
-
-        // Export data
         function exportData() {
             appRootRef.once('value').then((snapshot) => {
                 const dataToExport = snapshot.val();
@@ -1107,7 +1107,6 @@ const firebaseConfig = {
             });
         }
 
-        // Restore data
         function restoreData() {
             const input = document.createElement('input');
             input.type = 'file';
@@ -1115,7 +1114,6 @@ const firebaseConfig = {
             input.onchange = e => {
                 const file = e.target.files[0];
                 if (!file) return;
-
                 const reader = new FileReader();
                 reader.onload = function(event) {
                     try {
@@ -1124,7 +1122,6 @@ const firebaseConfig = {
                             showAlert('danger', 'ไฟล์ไม่ถูกต้อง! ไม่มีข้อมูล transactions หรือ budget');
                             return;
                         }
-
                         if (confirm('คุณต้องการเขียนทับข้อมูลทั้งหมดของแอปนี้ด้วยข้อมูลจากไฟล์นี้หรือไม่? (ข้อมูลโปรเจกต์อื่นจะปลอดภัย)')) {
                             if (confirm('ยืนยันครั้งสุดท้าย! ข้อมูลปัจจุบันของแอปนี้จะถูกแทนที่!')) {
                                 appRootRef.set(data)
@@ -1141,7 +1138,6 @@ const firebaseConfig = {
             input.click();
         }
 
-        // Clear all data
         function clearAllData() {
             if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลทั้งหมดของ "แอปบัญชีร้านผลไม้"? (ข้อมูลโปรเจกต์อื่นจะปลอดภัย)')) {
                  if (confirm('ยืนยันครั้งสุดท้ายเพื่อล้างข้อมูลของแอปนี้ทั้งหมด!')) {
@@ -1152,38 +1148,49 @@ const firebaseConfig = {
             }
         }
 
-        // Helper function to show alerts
+        function renderFullHistory() {
+            const filterType = document.getElementById('historyFilterType').value;
+            const filterFrom = document.getElementById('historyFilterFrom').value;
+            const filterTo = document.getElementById('historyFilterTo').value;
+            let filteredTransactions = [...transactions];
+            if (filterType !== 'all') {
+                filteredTransactions = filteredTransactions.filter(t => t.type === filterType);
+            }
+            if (filterFrom) {
+                filteredTransactions = filteredTransactions.filter(t => t.date >= filterFrom);
+            }
+            if (filterTo) {
+                filteredTransactions = filteredTransactions.filter(t => t.date <= filterTo);
+            }
+            filteredTransactions.sort(sortTransactions); // <-- FIXED: Sort the filtered results
+            renderTransactionList('historyList', filteredTransactions);
+        }
+
         function showAlert(type, message) {
             const alertDiv = document.createElement('div');
             alertDiv.className = `alert alert-${type}`;
             alertDiv.textContent = message;
             document.body.appendChild(alertDiv);
-            
             setTimeout(() => alertDiv.classList.add('show'), 10);
-
             setTimeout(() => {
                  alertDiv.classList.remove('show');
                  setTimeout(() => alertDiv.remove(), 500);
             }, 4000);
         }
 
-        // Helper function to format money
         function formatMoney(amount) {
             return new Intl.NumberFormat('th-TH', { style: 'decimal', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount || 0);
         }
 
-        // Helper function to format dates
         function formatDate(dateString) {
             if (!dateString) return '';
             const date = new Date(dateString);
             return date.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
         }
         
-        // Show/hide custom date range for reports
         document.getElementById('reportPeriod').onchange = function() {
             document.getElementById('customDateRange').style.display = (this.value === 'custom') ? 'block' : 'none';
         };
-
     </script>
 </body>
 </html>
